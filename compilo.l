@@ -8,6 +8,7 @@
 
 %%
 "if"	{return tIF;}
+"else"	{return tELSE;}
 "while"	{return tWHILE;}
 "("	{return tOPAR;}
 ")"	{return tCPAR;}
@@ -17,6 +18,8 @@
 "]"	{return tCBRA;}
 "return"	{return tRET;}
 ";"	{return tPV;}
+","	{return tCOM;}
+[ \t\n]	{return tSPA;}
 "="	{return tASSIGN;}
 "+"	{return tADD;}
 "*"	{return tMUL;}
@@ -28,7 +31,14 @@
 "=="	{return tEQ;}
 "int"	{return tINT;}
 "const"	{return tCONST;}
-"//.*$"	{}
+"//.*$"	{return tCOMMENT;}
 "void"	{return tVOID;}
--?[0-9]+	{}
-[a-z]+	{}
+-?[0-9]+	{
+    yylval.nb = atoi(yytext[0]);
+    return tNB;
+}
+[a-z]+	{
+    yylval.text = yytext[0];
+    return tTEXT;
+}
+%%

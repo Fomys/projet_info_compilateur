@@ -14,12 +14,10 @@
 ")"	{return tCPAR;}
 "{"	{return tOCUR;}
 "}"	{return tCCUR;}
-"["	{return tOBRA;}
-"]"	{return tCBRA;}
 "return"	{return tRET;}
 ";"	{return tPV;}
 ","	{return tCOM;}
-[ \t\n]	{return tSPA;}
+[ \t\n]	{}
 "="	{return tASSIGN;}
 "+"	{return tADD;}
 "*"	{return tMUL;}
@@ -31,14 +29,15 @@
 "=="	{return tEQ;}
 "int"	{return tINT;}
 "const"	{return tCONST;}
-"//.*$"	{return tCOMMENT;}
+"//.*$"	{}
 "void"	{return tVOID;}
+"/"	{return tDIV;}
 -?[0-9]+	{
-    yylval.nb = atoi(yytext[0]);
+    //yylval.nb = atoi(yytext[0]);
     return tNB;
 }
 [a-z]+	{
-    yylval.text = yytext[0];
+    //yylval.text = yytext[0];
     return tTEXT;
 }
 %%

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "y.tab.h"
+#include "consts.h"
 %}
 
 %option noyywrap
@@ -31,13 +32,14 @@
 "const"	{return tCONST;}
 "//.*$"	{}
 "void"	{return tVOID;}
+"printf" {return tPRINT;}
 "/"	{return tDIV;}
 -?[0-9]+	{
-    //yylval.nb = atoi(yytext[0]);
+    yylval.nb = atoi(yytext);
     return tNB;
 }
 [a-z]+	{
-    //yylval.text = yytext[0];
+    strncpy(yylval.text, yytext, 128);
     return tTEXT;
 }
 %%

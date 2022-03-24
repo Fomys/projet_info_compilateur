@@ -1,13 +1,24 @@
 %{
 #include <stdlib.h>
 #include <stdio.h>
+#include "consts.h"
+#include "symbol_table.h"
+#include "function_table.h"
 void yyerror(char *s);
 %}
-%token tIF tELSE tWHILE tOPAR tCPAR tOCUR tCCUR tRET tPV tASSIGN tADD tMUL tGT tLT tMIN tAND tOR tEQ tINT tCONST tVOID tCOM tDIV
-%token tTEXT
-%token tNB
-%start Compilo
+
+%union {int nb; char text[128];}
+%token tIF tELSE tWHILE tOPAR tCPAR tOCUR tCCUR tRET tPV tASSIGN tADD tMUL tGT tLT tMIN tAND tOR tEQ tINT tCONST tVOID tCOM tDIV tPRINT
+%token <text> tTEXT
+%token <nb> tNB
+
+%left tADD tMIN
+%left tMUL tDIV
+
+%start StartCompilo
 %%
+StartCompilo: Compilo {initialize_symbol_table(); initialize_function_table();};
+
 Compilo	:	Fonction
 	| Declaration tPV
 	| tCONST Declaration tPV
@@ -15,25 +26,18 @@ Compilo	:	Fonction
 	| Compilo Declaration tPV
 	| Compilo Fonction;
 
-Fonction	: FonctionInt | FonctionVoid;
-FonctionInt	:	tINT tTEXT tOPAR Parametres tCPAR tOCUR
-					Lignes
-					tRET Expression tPV
-				tCCUR;
+Declaration	:	tINT tTEXT {add_symbol(TYPE_INT, $2);};
+DeclarationFonctionInt : tINT tTEXT {add_function(TYPE_INT, $2);};
+DeclarationFonctionVoid : tVOID tTEXT {add_function(TYPE_VOID, $2);};
+DeclarationParam	:	tINT tTEXT {add_symbol(TYPE_INT, $2); add_param(TYPE_INT);};
 
-FonctionVoid	:	tVOID tTEXT tOPAR Parametres tCPAR tOCUR
-					Lignes
-				tCCUR;
-
-Parametres	:
-	| tVOID
-	| Declaration
-	| Parametres tCOM Declaration;
-
-Declaration	:	tINT tTEXT;
+EnterBlock : {enter_scope();};
+EndBlock : {exit_scope();};
 
 
-Lignes	:
+Rien : ;
+
+Lignes	: Rien
 	| Lignes Ligne;
 
 Ligne	:	tPV
@@ -42,14 +46,29 @@ Ligne	:	tPV
 	|	tTEXT tASSIGN Expression tPV
 	|	AppelFonction
 	|	BlocIf
-	|	BlocWhile;
+	|	BlocWhile
+    |   tPRINT tOPAR Expression tCPAR tPV {};
 
-Arguments	:
+Fonction	: FonctionInt | FonctionVoid;
+FonctionInt	:	DeclarationFonctionInt tOPAR EnterBlock Parametres tCPAR tOCUR
+					Lignes
+					tRET Expression tPV
+				tCCUR EndBlock ;
+
+FonctionVoid	:	DeclarationFonctionVoid tOPAR EnterBlock Parametres tCPAR tOCUR
+					    Lignes
+				    tCCUR EndBlock;
+
+Parametres	: Rien
+	| tVOID
+	| DeclarationParam
+	| Parametres tCOM DeclarationParam;
+
+Arguments	: Rien
 	|	Expression
 	|	Arguments tCOM Expression;
 
-AppelFonction	:
-	tTEXT tOPAR Arguments tCPAR;
+AppelFonction	: tTEXT tOPAR Arguments tCPAR;
 
 Expression	: tNB
 	| tTEXT
@@ -59,8 +78,8 @@ Expression	: tNB
 
 Operateur	:	tADD | tMUL | tMIN | tDIV | tEQ | tOR | tAND | tGT | tLT;
 
-BlocIf	:	tIF tOPAR Expression tCPAR tOCUR Lignes tCCUR
-		|	tIF tOPAR Expression tCPAR tOCUR Lignes tCCUR tELSE tOCUR Lignes tCCUR;
+BlocIf	:	tIF tOPAR Expression tCPAR tOCUR EnterBlock Lignes tCCUR EndBlock
+		|	tIF tOPAR Expression tCPAR tOCUR EnterBlock Lignes tCCUR EndBlock tELSE tOCUR EnterBlock Lignes tCCUR EndBlock;
 
-BlocWhile	:	tWHILE tOPAR Expression tCPAR tOCUR Lignes tCCUR;
+BlocWhile	:	tWHILE tOPAR Expression tCPAR tOCUR EnterBlock Lignes tCCUR EndBlock;
 %%

@@ -5,6 +5,7 @@ struct compil compil;
 void compil_initialize() {
     compil.symbol_table = symbol_table_alloc();
     compil.function_table = function_table_alloc();
+    compil.work_pointer = 10;
 }
 
 void compil_add_symbol(enum type type, char * name) {
@@ -23,10 +24,7 @@ void compil_add_function(enum type type, char * name) {
 
 void compil_add_param(enum type type, char * name) {
     // Ajout du symbole dans la table
-    struct symbol * symbol = symbol_alloc();
-    symbol->type = type;
-    symbol_set_name(symbol, name);
-    symbol_table_push_symbol(compil.symbol_table, symbol);
+    compil_add_symbol(type, name);
     // Ajout de la fonction
     struct function * function = function_table_get_last_function(compil.function_table);
     function_add_param(function, type);
@@ -46,5 +44,85 @@ void compil_print() {
     symbol_table_print(compil.symbol_table);
     function_table_print(compil.function_table);
 }
+
+int compil_expr_push_nb(int nb) {
+    compil.work_pointer ++;
+    push_instruction(AFC, compil.work_pointer, nb, 0);
+    return compil.work_pointer;
+}
+
+int compil_expr_push_var(char * name) {
+    compil.work_pointer++;
+    int src = symbol_table_get_address(compil.symbol_table, name);
+    push_instruction(COP, compil.work_pointer, src, 0);
+    return compil.work_pointer;
+}
+
+int compil_add(int a, int b) {
+    compil.work_pointer--;
+    push_instruction(ADD, compil.work_pointer, a, b);
+    return compil.work_pointer;
+}
+
+int compil_min(int a, int b) {
+    compil.work_pointer--;
+    push_instruction(SOU, compil.work_pointer, a, b);
+    return compil.work_pointer;
+}
+
+int compil_mul(int a, int b) {
+    compil.work_pointer--;
+    push_instruction(MUL, compil.work_pointer, a, b);
+    return compil.work_pointer;
+}
+
+int compil_div(int a, int b) {
+    compil.work_pointer--;
+    push_instruction(DIV, compil.work_pointer, a, b);
+    return compil.work_pointer;
+}
+
+int compil_eq(int a, int b) {
+    compil.work_pointer--;
+    push_instruction(EQU, compil.work_pointer, a, b);
+    return compil.work_pointer;
+}
+
+int compil_gt(int a, int b) {
+    compil.work_pointer--;
+    push_instruction(SUP, compil.work_pointer, a, b);
+    return compil.work_pointer;
+}
+
+int compil_lt(int a, int b) {
+    compil.work_pointer--;
+    push_instruction(INF, compil.work_pointer, a, b);
+    return compil.work_pointer;
+}
+
+
+void compil_assign(char * name, int addr) {
+    int dst = symbol_table_get_address(compil.symbol_table, name);
+    push_instruction(COP, dst, addr, 0);
+    compil.work_pointer--;
+}
+
+
+void compil_print_asm() {
+    program_print_asm();
+}
+
+void compil_start_if(int addr) {
+    push_instruction(JMF, addr, 0, 0);
+}
+
+void compil_patch_if(int pc) {
+    patch_instruction(pc, 1, get_pc());
+}
+
+int compil_get_pc() {
+    return get_pc();
+}
+
 
 //void compil_assign(char * name, );

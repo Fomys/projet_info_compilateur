@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "y.tab.h"
-#include "consts.h"
 %}
 
 %option noyywrap
@@ -25,8 +24,6 @@
 ">"	{return tGT;}
 "<"	{return tLT;}
 "-"	{return tMIN;}
-"&&"	{return tAND;}
-"||"	{return tOR;}
 "=="	{return tEQ;}
 "int"	{return tINT;}
 "const"	{return tCONST;}

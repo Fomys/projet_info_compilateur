@@ -7,33 +7,37 @@ void yyerror(char *s);
 %}
 
 %union {int nb; char text[128];}
-%token tIF tELSE tWHILE tOPAR tCPAR tOCUR tCCUR tRET tPV tASSIGN tADD tMUL tGT tLT tMIN tAND tOR tEQ tINT tCONST tVOID tCOM tDIV tPRINT
+%token tIF tELSE tWHILE tOPAR tCPAR tOCUR tCCUR tRET tPV tASSIGN tADD tMUL tGT tLT tMIN tEQ tINT tCONST tVOID tCOM tDIV tPRINT
 %token <text> tTEXT
 %token <nb> tNB
 
+%type <text> Declaration
+%type <nb> Expression
+%type <nb> Operation
+
+%left tEQ
+%left tLT tGT
 %left tADD tMIN
 %left tMUL tDIV
 
+
 %start StartCompilo
 %%
-StartCompilo: InitializeCompilo Compilo ;
+StartCompilo: InitializeCompilo Compilo {compil_print_asm();};
 InitializeCompilo : {compil_initialize();};
 
-Compilo	:	Fonction
-	| Declaration tPV
-	| tCONST Declaration tPV
-	| Compilo tCONST Declaration tPV
+Compilo	:	Rien
 	| Compilo Declaration tPV
+	| Compilo Declaration tASSIGN Expression tPV {compil_assign($2, $4);}
 	| Compilo Fonction;
 
-Declaration	:	tINT tTEXT {compil_add_symbol(TYPE_INT, $2);};
+Declaration	:	tINT tTEXT {compil_add_symbol(TYPE_INT, $2); strcpy(&$$,$2);}
 DeclarationFonctionInt : tINT tTEXT {compil_add_function(TYPE_INT, $2);};
 DeclarationFonctionVoid : tVOID tTEXT {compil_add_function(TYPE_VOID, $2);};
 DeclarationParam	:	tINT tTEXT {compil_add_param(TYPE_INT, $2);};
 
 EnterBlock : {compil_enter_scope();};
 EndBlock : {compil_exit_scope();};
-
 
 Rien : ;
 
@@ -42,8 +46,8 @@ Lignes	: Rien
 
 Ligne	:	tPV
 	|	Declaration tPV
-	|	Declaration tASSIGN Expression tPV;
-	|	tTEXT tASSIGN Expression tPV
+	|	Declaration tASSIGN Expression tPV {compil_assign($1, $3);}
+	|	tTEXT tASSIGN Expression tPV {compil_assign($1, $3);}
 	|	AppelFonction
 	|	BlocIf
 	|	BlocWhile
@@ -70,16 +74,22 @@ Arguments	: Rien
 
 AppelFonction	: tTEXT tOPAR Arguments tCPAR;
 
-Expression	: tNB {compil_expr_push($1);}
-	| tTEXT
+Expression	: tNB {$$ = compil_expr_push_nb($1);}
+	| tTEXT {$$ = compil_expr_push_var($1);}
 	| AppelFonction
-	| Expression Operateur Expression
-	| tOPAR Expression tCPAR ;
+	| Operation
+	| tOPAR Expression tCPAR {$$ = $2;};
 
-Operateur	:	tADD | tMUL | tMIN | tDIV | tEQ | tOR | tAND | tGT | tLT;
+Operation	:	Expression tADD Expression {$$ = compil_add($1,$3);}
+	| Expression tMIN Expression {$$ = compil_min($1,$3);}
+	| Expression tMUL Expression {$$ = compil_mul($1,$3);}
+	| Expression tDIV Expression {$$= compil_div($1,$3);}
+	| Expression tEQ Expression {$$= compil_eq($1,$3);}
+	| Expression tGT Expression {$$= compil_gt($1,$3);}
+	| Expression tLT Expression {$$= compil_lt($1,$3);};
 
-BlocIf	:	tIF tOPAR Expression tCPAR tOCUR EnterBlock Lignes tCCUR EndBlock
-		|	tIF tOPAR Expression tCPAR tOCUR EnterBlock Lignes tCCUR EndBlock tELSE tOCUR EnterBlock Lignes tCCUR EndBlock;
+BlocIf	:	tIF tOPAR Expression tCPAR tOCUR {compil_start_if($3);$<nb>1 = compil_get_pc();} EnterBlock Lignes tCCUR EndBlock{compil_patch_if($<nb>1-1);};
+		//|	tIF tOPAR Expression tCPAR tOCUR EnterBlock Lignes tCCUR EndBlock tELSE tOCUR EnterBlock Lignes tCCUR EndBlock;
 
 BlocWhile	:	tWHILE tOPAR Expression tCPAR tOCUR EnterBlock Lignes tCCUR EndBlock;
 %%

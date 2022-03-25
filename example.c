@@ -1,12 +1,13 @@
-int c;
+int a = 3;
 
 void main(void) {
-    int a;
     int b;
-    a = 2;
+    int c;
+    b = 2;
     c = 1;
-    b = a + c;
-    printf(a);
-    printf(b);
-    printf(c);
+    a = (b<c + c==a * c);
+    if (a) {
+        a = 12;
+    }
+    a = 13;
 }

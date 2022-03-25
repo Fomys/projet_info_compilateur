@@ -1,9 +1,8 @@
 %{
 #include <stdlib.h>
 #include <stdio.h>
-#include "consts.h"
-#include "symbol_table.h"
-#include "function_table.h"
+#include "compil.h"
+
 void yyerror(char *s);
 %}
 
@@ -17,7 +16,8 @@ void yyerror(char *s);
 
 %start StartCompilo
 %%
-StartCompilo: Compilo {initialize_symbol_table(); initialize_function_table();};
+StartCompilo: InitializeCompilo Compilo ;
+InitializeCompilo : {compil_initialize();};
 
 Compilo	:	Fonction
 	| Declaration tPV
@@ -26,13 +26,13 @@ Compilo	:	Fonction
 	| Compilo Declaration tPV
 	| Compilo Fonction;
 
-Declaration	:	tINT tTEXT {add_symbol(TYPE_INT, $2);};
-DeclarationFonctionInt : tINT tTEXT {add_function(TYPE_INT, $2);};
-DeclarationFonctionVoid : tVOID tTEXT {add_function(TYPE_VOID, $2);};
-DeclarationParam	:	tINT tTEXT {add_symbol(TYPE_INT, $2); add_param(TYPE_INT);};
+Declaration	:	tINT tTEXT {compil_add_symbol(TYPE_INT, $2);};
+DeclarationFonctionInt : tINT tTEXT {compil_add_function(TYPE_INT, $2);};
+DeclarationFonctionVoid : tVOID tTEXT {compil_add_function(TYPE_VOID, $2);};
+DeclarationParam	:	tINT tTEXT {compil_add_param(TYPE_INT, $2);};
 
-EnterBlock : {enter_scope();};
-EndBlock : {exit_scope();};
+EnterBlock : {compil_enter_scope();};
+EndBlock : {compil_exit_scope();};
 
 
 Rien : ;
@@ -70,7 +70,7 @@ Arguments	: Rien
 
 AppelFonction	: tTEXT tOPAR Arguments tCPAR;
 
-Expression	: tNB
+Expression	: tNB {compil_expr_push($1);}
 	| tTEXT
 	| AppelFonction
 	| Expression Operateur Expression

@@ -52,7 +52,7 @@ Ligne	: 	tPV
 		| 	AppelFonction
 		| 	BlocIf
 		| 	BlocWhile
-   		| 	tPRINT tOPAR Expression tCPAR tPV {printf("coucou\n");compil_print($3);};
+   		| 	tPRINT tOPAR Expression tCPAR tPV {compil_print($3);};
 
 Fonction	: 	FonctionInt | FonctionVoid;
 FonctionInt	:	DeclarationFonctionInt tOPAR EnterBlock Parametres tCPAR tOCUR
@@ -94,5 +94,5 @@ BlocIf	: 	tIF tOPAR Expression tCPAR  {$<nb>1 = compil_get_pc();compil_start_if(
 FinIf 	:	Rien {$$=compil_get_pc();}
 		|	tELSE  {$<nb>1 = compil_get_pc(); compil_start_else(); $<nb>$=compil_get_pc();} tOCUR EnterBlock Lignes tCCUR EndBlock {compil_patch_else($<nb>1); $$=$<nb>2;};
 
-BlocWhile	: 	tWHILE {$<nb>1 = compil_get_pc();} tOPAR Expression tCPAR {compil_start_while($4);} tOCUR EnterBlock Lignes tCCUR EndBlock {compil_patch_while($<nb>1);};
+BlocWhile	: 	tWHILE {$<nb>$ = compil_get_pc();} tOPAR Expression tCPAR {$<nb>$ = compil_get_pc(); compil_start_while($4);} tOCUR EnterBlock Lignes tCCUR EndBlock {compil_patch_while($<nb>2, $<nb>6);};
 %%

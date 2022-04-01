@@ -6,6 +6,7 @@ struct instruction instructions[1000];
 
 
 void push_instruction(enum instructionkind instruction, int op1, int op2, int op3) {
+    //printf("%d %d %d %d\n", instruction, op1, op2, op3);
     instructions[pc].instruction = instruction;
     instructions[pc].operandes[0] = op1;
     instructions[pc].operandes[1] = op2;
@@ -62,5 +63,7 @@ void program_print_asm() {
     }
 }
 void patch_instruction(int pc, int operand, int value) {
-instructions[pc].operandes[operand] = value;
+   //printf("old = %d %d %d %d\n", instructions[pc].instruction, instructions[pc].operandes[0], instructions[pc].operandes[1], instructions[pc].operandes[2]);
+    instructions[pc].operandes[operand] = value;
+    //printf("new = %d %d %d %d\n", instructions[pc].instruction, instructions[pc].operandes[0], instructions[pc].operandes[1], instructions[pc].operandes[2]);
 }

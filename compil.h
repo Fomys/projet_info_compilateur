@@ -87,7 +87,7 @@ void compil_print_asm();
 void compil_start_if(int addr);
 void compil_patch_if(int pc, int addr);
 void compil_start_while(int addr);
-void compil_patch_while(int pc);
+void compil_patch_while(int pc, int p_jmp);
 void compil_start_else();
 void compil_patch_else(int pc);
 int compil_get_pc();

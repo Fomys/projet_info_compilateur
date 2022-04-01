@@ -43,7 +43,6 @@ def equ(ins):
     
 def sup(ins):
     global pc, mem
-    print(mem[ins[2]], mem[ins[3]])
     if mem[ins[2]] > mem[ins[3]] :
         mem[ins[1]] = 1
     else :
@@ -91,10 +90,10 @@ instructions = {
 
 asm = []
 with open("out.asm") as f:
-    asm = f.readlines()
+    asm = map(lambda l: l.strip().upper().strip().split(" "), f.readlines())
+    asm = list(map(lambda ins: (ins[0], int(ins[1]), int(ins[2]), int(ins[3])), asm))
 
 while pc < len(asm):
-    line = asm[pc]
-    ins = line.upper().strip().split(" ")
-    ins = (ins[0], int(ins[1]), int(ins[2]), int(ins[3]))
+    ins = asm[pc]
+    #input()
     instructions[ins[0]](ins)

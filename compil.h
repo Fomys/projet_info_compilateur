@@ -80,11 +80,16 @@ void compil_assign(char * name, int addr);
 /*
  * Affiche le compilateur
  */
-void compil_print();
+void compil_print_state();
 
 void compil_print_asm();
 
 void compil_start_if(int addr);
-void compil_patch_if(int pc);
+void compil_patch_if(int pc, int addr);
+void compil_start_while(int addr);
+void compil_patch_while(int pc);
+void compil_start_else();
+void compil_patch_else(int pc);
 int compil_get_pc();
+void compil_print(int addr);
 #endif //COMPIL_H

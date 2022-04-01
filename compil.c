@@ -28,7 +28,7 @@ void compil_add_param(enum type type, char * name) {
     // Ajout de la fonction
     struct function * function = function_table_get_last_function(compil.function_table);
     function_add_param(function, type);
-    compil_print();
+    compil_print_state();
 }
 
 void compil_enter_scope() {
@@ -37,10 +37,10 @@ void compil_enter_scope() {
 
 void compil_exit_scope() {
     symbol_table_exit_scope(compil.symbol_table);
-    compil_print();
+    compil_print_state();
 }
 
-void compil_print() {
+void compil_print_state() {
     symbol_table_print(compil.symbol_table);
     function_table_print(compil.function_table);
 }
@@ -116,13 +116,36 @@ void compil_start_if(int addr) {
     push_instruction(JMF, addr, 0, 0);
 }
 
-void compil_patch_if(int pc) {
-    patch_instruction(pc, 1, get_pc());
+void compil_patch_if(int p_if, int addr) {
+    //modifie le JMF situé en p_if : l'argument 1 devient addr
+    patch_instruction(p_if, 1, addr);
+}
+
+void compil_start_else() {
+    push_instruction(JMP, 0, 0, 0);
+}
+
+void compil_patch_else(int p_else) {
+    //modifie le JMP situé en p_else : l'argument 1 devient current pointeur
+    patch_instruction(p_else, 0, get_pc());
+}
+
+
+void compil_start_while(int addr) {
+    push_instruction(JMF, addr, 0, 0);
+}
+
+void compil_patch_while(int p_while) {
+    push_instruction(JMP, p_while, 0, 0);
+    patch_instruction(p_while, 1, get_pc());
 }
 
 int compil_get_pc() {
     return get_pc();
 }
 
+void compil_print(int addr) {
+    push_instruction(PRI, addr, 0, 0);
+}
 
 //void compil_assign(char * name, );

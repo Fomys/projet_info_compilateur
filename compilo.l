@@ -29,7 +29,7 @@
 "const"	{return tCONST;}
 "//.*$"	{}
 "void"	{return tVOID;}
-"printf" {return tPRINT;}
+"print" {return tPRINT;}
 "/"	{return tDIV;}
 -?[0-9]+	{
     yylval.nb = atoi(yytext);

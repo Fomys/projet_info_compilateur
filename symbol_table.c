@@ -62,7 +62,7 @@ void symbol_table_enter_scope(struct symbol_table * table) {
 }
 void symbol_table_exit_scope(struct symbol_table * table) {
     table->current_depth -= 1;
-    while(table->symbols[table->symbol_count - 1]->depth > table->current_depth) {
+    while(table->symbol_count > 0 && table->symbols[table->symbol_count - 1]->depth > table->current_depth) {
         symbol_free(table->symbols[table->symbol_count - 1]);
         table->symbol_count--;
     }

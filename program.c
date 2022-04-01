@@ -18,49 +18,49 @@ int get_pc() {
 }
 
 void program_print_asm() {
+    FILE * fd = fopen("out.asm", "w");
     for(unsigned int i = 0; i < pc; i++) {
-        printf("%d - ", i);
         switch(instructions[i].instruction) {
             case ADD:
-                printf("ADD %d %d %d\n", instructions[i].operandes[0], instructions[i].operandes[1], instructions[i].operandes[2]);
+                fprintf(fd, "ADD");
                 break;
             case SOU:
-                printf("SOU %d %d %d\n", instructions[i].operandes[0], instructions[i].operandes[1], instructions[i].operandes[2]);
+                fprintf(fd, "SOU");
                 break;
             case MUL:
-                printf("MUL %d %d %d\n", instructions[i].operandes[0], instructions[i].operandes[1], instructions[i].operandes[2]);
+                fprintf(fd, "MUL");
                 break;
             case DIV:
-                printf("DIV %d %d %d\n", instructions[i].operandes[0], instructions[i].operandes[1], instructions[i].operandes[2]);
+                fprintf(fd, "DIV");
                 break;
             case EQU:
-                printf("EQU %d %d %d\n", instructions[i].operandes[0], instructions[i].operandes[1], instructions[i].operandes[2]);
+                fprintf(fd, "EQU");
                 break;
             case SUP:
-                printf("SUP %d %d %d\n", instructions[i].operandes[0], instructions[i].operandes[1], instructions[i].operandes[2]);
+                fprintf(fd, "SUP");
                 break;
             case INF:
-                printf("INF %d %d %d\n", instructions[i].operandes[0], instructions[i].operandes[1], instructions[i].operandes[2]);
+                fprintf(fd, "INF");
                 break;
             case COP:
-                printf("COP %d %d\n", instructions[i].operandes[0], instructions[i].operandes[1]);
+                fprintf(fd, "COP");
                 break;
             case AFC:
-                printf("AFC %d %d\n", instructions[i].operandes[0], instructions[i].operandes[1]);
+                fprintf(fd, "AFC");
                 break;
             case JMP:
-                printf("JMP %d\n", instructions[i].operandes[0]);
+                fprintf(fd, "JMP");
                 break;
             case JMF:
-                printf("JMF %d %d\n", instructions[i].operandes[0], instructions[i].operandes[1]);
+                fprintf(fd, "JMF");
                 break;
             case PRI:
-                printf("PRI %d\n", instructions[i].operandes[0]);
+                fprintf(fd, "PRI");
                 break;
         }
+        fprintf(fd, " %d %d %d\n", instructions[i].operandes[0], instructions[i].operandes[1], instructions[i].operandes[2]);
     }
 }
-
 void patch_instruction(int pc, int operand, int value) {
 instructions[pc].operandes[operand] = value;
 }

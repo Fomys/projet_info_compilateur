@@ -1,25 +1,12 @@
-int a = 3 ;
+a = 2;
+b = 3;
+c = 5;
+d = 7;
+e = 11;
 
-void main(void) {
-    int b;
-    int c = 14 ;
-    b = 2 ;
-
-    if (a == 3) {
-        b = 8;
-    }
-
-    if (a < c) {
-        b = b + 1 ;
-    } else {
-        b = b - 1 ;
-    }
-    
-    int compteur = 0;
-    while (b > 0) {
-        b = b - 1;
-        compteur = compteur + 1;
-    }
-
-    print(compteur);
+if c < a {
+    e = a;
+} else {
+    e = b;
 }
+f = a + b + c + d + e;

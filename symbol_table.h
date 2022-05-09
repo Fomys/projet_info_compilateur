@@ -1,66 +1,73 @@
 #ifndef SYMBOL_TABLE_H
 #define SYMBOL_TABLE_H
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include "type.h"
+#include "instruction_array.h"
+
+enum symbol_kind {
+    SYMBOL_UNKNOWN,
+    SYMBOL_VAR,
+    SYMBOL_TYPE,
+    SYMBOL_FUNCTION
+};
+
+struct symbol_var {
+    struct symbol* type;
+};
+
+struct symbol_function {
+    struct arguments* arguments;
+    struct AST_node* ret;
+    struct AST_node* body;
+    struct instruction_array* assembled;
+};
 
 struct symbol {
-    enum type type;
-    unsigned int depth;
-    char * name;
+    enum symbol_kind kind;
+    unsigned int usage_count;
+    char* name;
+    union {
+        struct symbol_var symbol_var;
+        struct symbol_function symbol_function;
+    };
 };
 
 struct symbol_table {
-    unsigned int symbol_count;
-    unsigned int current_depth;
-    struct symbol ** symbols;
+    struct symbol_table* parent;
+    struct symbol** symbols;
+    unsigned int symbols_count;
 };
 
-/*
- * Alloue la mémoire pour un symbole
- */
-struct symbol * symbol_alloc();
-/*
- * Libère la mémoire pour un symbole
- */
-void symbol_free(struct symbol * symbol);
-/*
- * Défini le nom du symbole
- *
- * char * name: copié dans la structure, c'est à l'appellant de libérer la mémoire
- */
-void symbol_set_name(struct symbol * symbol, char * name);
-void symbol_print(struct symbol * symbol);
+struct arguments {
+    struct symbol** arguments;
+    unsigned int arguments_count;
+};
 
-/*
- * Alloue la mémoire associé à la table des symbole
- */
-struct symbol_table * symbol_table_alloc ();
-/*
- * Libère la mémoire associé à la table des symboles
- */
-void symbol_table_free(struct symbol_table * table);
-/*
- * Ajoute un symbole à la table des symboles
- *
- * struct symbol * symbol: prend la propriété de ce pointeur, celui-ci ne doit pas être libéré manuellement
- */
-void symbol_table_push_symbol(struct symbol_table * table, struct symbol * symbol);
-/*
- * Les prochains symboles ajoutés seront dans un scope plus restreint.
- */
-void symbol_table_enter_scope(struct symbol_table * table);
-/*
- * On sort du scope actuel, les variables associées sont supprimées
- */
-void symbol_table_exit_scope(struct symbol_table * table);
-/*
- * Récupération de l'adresse associé à une variable relativement au scope actuel
- *
- * Une valeur positive signifie que c'est une variable locale, une adresse négative
- */
-unsigned int symbol_table_get_address(struct symbol_table * table, char * name);
-void symbol_table_print(struct symbol_table * table);
-#endif // SYMBOL_TABLE_H
+void symbol_table_init();
+
+struct symbol_table* symbol_table_alloc();
+void symbol_table_free(struct symbol_table*);
+
+struct symbol* symbol_alloc();
+void symbol_free(struct symbol*);
+
+struct arguments* arguments_alloc();
+void arguments_free(struct arguments*);
+void add_argument(struct arguments*, struct symbol*);
+
+void symbol_print(struct symbol*);
+struct symbol* symbol_table_get(struct symbol_table*, char*);
+
+void symbol_set_kind(struct symbol*, enum symbol_kind);
+
+void symbol_table_print(struct symbol_table*);
+
+struct symbol* symbol_table_current_get_or_insert(char*);
+void symbol_table_current_print();
+void symbol_table_current_enter_scope();
+void symbol_set_arguments(struct symbol*, struct arguments*);
+void arguments_print(struct arguments*);
+void symbol_set_ast(struct symbol*, struct AST_node*);
+void symbol_table_current_exit_scope();
+struct symbol* symbol_table_create_anonymous(struct symbol_table*);
+struct symbol_table* symbol_table_current_get();
+#endif //SYMBOL_TABLE_H

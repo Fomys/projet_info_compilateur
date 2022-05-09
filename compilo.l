@@ -1,7 +1,17 @@
 %{
 #include <stdlib.h>
 #include <stdio.h>
+#include "ast.h"
+#include "symbol_table.h"
 #include "y.tab.h"
+
+unsigned int offset;
+struct AST_location yylloc;
+
+#define YY_USER_ACTION         \
+  offset += yyleng;            \
+  yylloc.last_line = yylineno; \
+  yylloc.last_column = offset;
 %}
 
 %option noyywrap
@@ -25,18 +35,17 @@
 "<"	{return tLT;}
 "-"	{return tMIN;}
 "=="	{return tEQ;}
-"int"	{return tINT;}
-"const"	{return tCONST;}
-"//.*$"	{}
-"void"	{return tVOID;}
+"fn"	{return tFN;}
 "print" {return tPRINT;}
 "/"	{return tDIV;}
 -?[0-9]+	{
-    yylval.nb = atoi(yytext);
+    yylval.node = AST_node_alloc(yylloc);
+    AST_node_integer_initialize(yylval.node, atoi(yytext));
     return tNB;
 }
-[a-z]+	{
-    strncpy(yylval.text, yytext, 128);
+[a-z_]+	{
+    yylval.identifier = malloc(strlen(yytext));
+    strcpy(yylval.identifier, yytext);
     return tTEXT;
 }
 %%

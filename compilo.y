@@ -1,20 +1,38 @@
 %{
 #include <stdlib.h>
 #include <stdio.h>
-#include "compil.h"
+#include "ast.h"
+#include "symbol_table.h"
+#include "assembler.h"
 
 void yyerror(char *s);
+extern FILE *yyout;
+
+#define YYLTYPE (struct location);
 %}
 
-%union {int nb; char text[128];}
-%token tIF tELSE tWHILE tOPAR tCPAR tOCUR tCCUR tRET tPV tASSIGN tADD tMUL tGT tLT tMIN tEQ tINT tCONST tVOID tCOM tDIV tPRINT
-%token <text> tTEXT
-%token <nb> tNB
+%union {
+    char* identifier;
+    struct symbol* symbol;
+    struct arguments* arguments;
+    struct AST_node* node;
+    struct call_parameters* parameters;
+}
+%token tIF tELSE tWHILE tOPAR tCPAR tOCUR tCCUR tRET tPV tASSIGN tADD tMUL tGT tLT tMIN tEQ tFN tCOM tDIV tPRINT
+%token <identifier> tTEXT
+%token <node> tNB
 
-%type <text> Declaration
-%type <nb> Expression
-%type <nb> Operation
-%type <nb> FinIf
+%type <node> Lines
+%type <symbol> Symbol
+%type <node> Assignation
+%type <node> Declaration
+%type <node> Expression
+%type <arguments> Arguments
+%type <node> AppelFonction
+%type <node> If
+%type <parameters> Parameters
+%type <node> Else
+%type <node> Return
 
 %left tEQ
 %left tLT tGT
@@ -24,75 +42,88 @@ void yyerror(char *s);
 
 %start StartCompilo
 %%
-StartCompilo: InitializeCompilo Compilo {compil_print_asm();};
-InitializeCompilo : {compil_initialize();};
+StartCompilo: {
+    symbol_table_init();
+} Lines {
+    AST_set_symbol_table($2, symbol_table_current_get());
+    AST_node_print($2);
+    struct instruction_array* instructions = assemble($2);
+    instruction_array_print_raw(instructions, yyout);
+    instruction_array_print(instructions);
+};
 
-Compilo	: 	Rien
-		| 	Compilo Declaration tPV
-		| 	Compilo Declaration tASSIGN Expression tPV {compil_assign($2, $4);}
-		| 	Compilo Fonction;
+Lines	:
+    { $$ = AST_node_body_alloc(); } |
+    Lines Assignation tPV { AST_node_body_add_child($1, $2); $$ = $1;} |
+    Lines Declaration tPV { AST_node_body_add_child($1, $2); $$ = $1;} |
+    Lines Expression tPV { AST_node_body_add_child($1, $2); $$ = $1; } |
+    Lines Function { $$ = $1; } |
+    Lines If {$$ = $1; AST_node_body_add_child($$, $2);} |
+    Lines Return { AST_node_body_add_child($$, $2), $$ = $1;};
+Return : tRET Expression tPV {$$ = AST_node_return_from($2); };
+Declaration :
+    Symbol {
+        symbol_set_kind($1, SYMBOL_VAR);
+        $$ = AST_node_declaration_from($1);
+    };
 
-Declaration	: tINT tTEXT {compil_add_symbol(TYPE_INT, $2); strcpy(&$$,$2);}
-DeclarationFonctionInt : tINT tTEXT {compil_add_function(TYPE_INT, $2);};
-DeclarationFonctionVoid : tVOID tTEXT {compil_add_function(TYPE_VOID, $2);};
-DeclarationParam : tINT tTEXT {compil_add_param(TYPE_INT, $2);};
+Assignation	:
+    Symbol tASSIGN Expression { $$ = AST_node_assignement_from($1, $3); };
 
-EnterBlock : {compil_enter_scope();};
-EndBlock : {compil_exit_scope();};
+Expression :
+    tNB { $$ = $1; } |
+    Symbol { $$ = AST_node_symbol_from($1); } |
+    Expression tADD Expression { $$ = AST_node_operation_from(OP_ADD, $1, $3);} |
+    Expression tMUL Expression { $$ = AST_node_operation_from(OP_MUL, $1, $3); } |
+    Expression tDIV Expression { $$ = AST_node_operation_from(OP_DIV, $1, $3); } |
+    Expression tMIN Expression { $$ = AST_node_operation_from(OP_SUB, $1, $3); } |
+    Expression tEQ Expression { $$ = AST_node_operation_from(OP_EQ, $1, $3); } |
+    Expression tGT Expression { $$ = AST_node_operation_from(OP_GT, $1, $3); } |
+    Expression tLT Expression { $$ = AST_node_operation_from(OP_LT, $1, $3); } |
+    tOPAR Expression tCPAR { $$ = $2; } |
+    AppelFonction { $$ = $1; };
 
-Rien : ;
+AppelFonction : Symbol tOPAR Parameters tCPAR  {$$ = AST_node_call_from($1, $3);};
 
-Lignes	: 	Rien
-		| 	Lignes Ligne;
+Parameters :
+    { $$ = call_parameters_alloc();} |
+    Expression { $$ = call_parameters_alloc(); call_parameters_add($$, $1); } |
+    Parameters tCOM Expression {$$ = $1; call_parameters_add($$, $3); };
 
-Ligne	: 	tPV
-		| 	Declaration tPV
-		| 	Declaration tASSIGN Expression tPV {compil_assign($1, $3);}
-		| 	tTEXT tASSIGN Expression tPV {compil_assign($1, $3);}
-		| 	AppelFonction
-		| 	BlocIf
-		| 	BlocWhile
-   		| 	tPRINT tOPAR Expression tCPAR tPV {compil_print($3);};
+Symbol : tTEXT { $$ = symbol_table_current_get_or_insert($1); };
 
-Fonction	: 	FonctionInt | FonctionVoid;
-FonctionInt	:	DeclarationFonctionInt tOPAR EnterBlock Parametres tCPAR tOCUR
-					Lignes
-					tRET Expression tPV
-				tCCUR EndBlock ;
+Function : tFN Symbol tOPAR {
+    symbol_table_current_enter_scope();
+} Arguments tCPAR tOCUR Lines tCCUR {
+    symbol_set_arguments($2, $5);
+    symbol_set_kind($2, SYMBOL_FUNCTION);
+    AST_set_symbol_table($8, symbol_table_current_get());
+    symbol_set_ast($2, $8);
+    symbol_table_current_exit_scope();
+};
 
-FonctionVoid	:	DeclarationFonctionVoid tOPAR EnterBlock Parametres tCPAR tOCUR
-					    Lignes
-				    tCCUR EndBlock;
 
-Parametres	: 	Rien
-			| 	tVOID
-			| 	DeclarationParam
-			|	 Parametres tCOM DeclarationParam;
+Arguments :
+    { $$ = arguments_alloc(); } |
+    Symbol { $$ = arguments_alloc(); add_argument($$, $1); } |
+    Arguments tCOM Symbol { $$ = $1; add_argument($$, $3); };
 
-Arguments	: 	Rien
-			| 	Expression
-			| 	Arguments tCOM Expression;
+If :
+    tIF Expression EnterScope Lines {
+        AST_set_symbol_table($4, symbol_table_current_get());
+    } ExitScope Else {
+        $$ = AST_node_if_else_from($2, $4, $7);
+    };
+Else :
+    { $$ = AST_node_body_alloc(); symbol_table_current_enter_scope(); AST_set_symbol_table($$, symbol_table_current_get()); symbol_table_current_exit_scope();} |
+    tELSE EnterScope Lines {
+        AST_set_symbol_table($3, symbol_table_current_get());
+    } ExitScope {
+        $$ = $3;
+    };
 
-AppelFonction	: 	tTEXT tOPAR Arguments tCPAR;
+EnterScope : tOCUR {symbol_table_current_enter_scope();};
 
-Expression	: 	tNB {$$ = compil_expr_push_nb($1);}
-			| 	tTEXT {$$ = compil_expr_push_var($1);}
-			| 	AppelFonction
-			| 	Operation
-			| 	tOPAR Expression tCPAR {$$ = $2;};
+ExitScope : tCCUR {symbol_table_current_exit_scope();};
 
-Operation	: 	Expression tADD Expression {$$ = compil_add($1,$3);}
-			| 	Expression tMIN Expression {$$ = compil_min($1,$3);}
-			| 	Expression tMUL Expression {$$ = compil_mul($1,$3);}
-			| 	Expression tDIV Expression {$$= compil_div($1,$3);}
-			| 	Expression tEQ Expression {$$= compil_eq($1,$3);}
-			| 	Expression tGT Expression {$$= compil_gt($1,$3);}
-			| 	Expression tLT Expression {$$= compil_lt($1,$3);};
-
-BlocIf	: 	tIF tOPAR Expression tCPAR  {$<nb>1 = compil_get_pc();compil_start_if($3);} tOCUR EnterBlock Lignes tCCUR EndBlock FinIf {compil_patch_if($<nb>1,$11);}  ;
-
-FinIf 	:	Rien {$$=compil_get_pc();}
-		|	tELSE  {$<nb>1 = compil_get_pc(); compil_start_else(); $<nb>$=compil_get_pc();} tOCUR EnterBlock Lignes tCCUR EndBlock {compil_patch_else($<nb>1); $$=$<nb>2;};
-
-BlocWhile	: 	tWHILE {$<nb>$ = compil_get_pc();} tOPAR Expression tCPAR {$<nb>$ = compil_get_pc(); compil_start_while($4);} tOCUR EnterBlock Lignes tCCUR EndBlock {compil_patch_while($<nb>2, $<nb>6);};
 %%

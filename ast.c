@@ -80,9 +80,11 @@ void _AST_node_print(struct AST_node *node, int offset) {
             PRINT_SPACES(offset + 1);
             printf("condition:");
             _AST_node_print(node->node_if.condition, offset + 2);
-            printf("if true:");
+            PRINT_SPACES(offset + 1);
+            printf("if true:\n");
             _AST_node_print(node->node_if.if_true, offset + 2);
-            printf("if false:");
+            PRINT_SPACES(offset + 1);
+            printf("if false:\n");
             _AST_node_print(node->node_if.if_false, offset + 2);
             break;
         case NODE_DECLARATION:

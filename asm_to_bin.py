@@ -6,17 +6,19 @@ with open("out.asm") as f:
 ins = {
     "NOP":  lambda op1, op2, op3: "00_00_00_00",
     "AFC":  lambda op1, op2, op3: f"00_{op2}_{op1}_01",
-    "JMP":  lambda op1, op2, op3: f"00_{op1}_00_04",
-    "JMZ":  lambda op1, op2, op3: f"00_{op2}_{op1}_05",
-    "CPY":  lambda op1, op2, op3: f"{op2}_00_{op1}_06",
-    "LT":   lambda op1, op2, op3: f"{op2}_{op3}_{op1}_08",
-    "ADD":  lambda op1, op2, op3: f"{op2}_{op3}_{op1}_09",
-    "ADDI": lambda op1, op2, op3: f"00_{op2}_{op1}_0A",
-    "SUB":  lambda op1, op2, op3: f"{op2}_{op3}_{op1}_0B",
-    "SUBI": lambda op1, op2, op3: f"00_{op2}_{op1}_0C",
-    "STR": lambda op1, op2, op3: f"{op1}_{op2}_00_03",
-    "LDR": lambda op1, op2, op3: f"{op1}_{op2}_00_02",
-    "END": lambda op1, op2, op3: "00_00_00_00"
+    "LDR":  lambda op1, op2, op3: f"00_{op2}_{op1}_02", # refaire une partie du compilo + des trucs du cpu
+    "STR":  lambda op1, op2, op3: f"{op1}_{op2}_00_03",
+    "JMPI":  lambda op1, op2, op3: f"00_{op1}_00_04",
+    "JMZI":  lambda op1, op2, op3: f"{op1}_{op2}_00_05",
+    "CPY":  lambda op1, op2, op3: f"00_{op2}_{op1}_06",
+    "LT":   lambda op1, op2, op3: f"{op3}_{op2}_{op1}_08",
+    "ADD":  lambda op1, op2, op3: f"{op3}_{op2}_{op1}_09",
+    "ADDI": lambda op1, op2, op3: f"{op2}_{op3}_{op1}_0A",
+    "SUB":  lambda op1, op2, op3: f"{op3}_{op2}_{op1}_0B",
+    "SUBI": lambda op1, op2, op3: f"{op2}_{op3}_{op1}_0C", # mal géré
+    "JMP": lambda op1, op2, op3: f"00_{op1}_00_0C",
+    "END":  lambda op1, op2, op3: "00_00_00_00",
+    "LABEL": lambda op1, op2, op3: "00_00_00_00"
 }
 i = 0
 for i, (opcode, *op) in enumerate(asm):

@@ -23,14 +23,6 @@ void memory_manager_free(struct memory_manager *manager) {
     free(manager);
 }
 
-int memory_manager_find_free_register(struct memory_manager *manager) {
-    for (int i = 0; i < GENERAL_REGISTER_COUNT; i++) {
-        if (manager->available_registers[i] == true || manager->general_registers[i]->usage_count == 0) {
-            return i;
-        }
-    }
-    return -1;
-}
 
 int memory_manager_find_free_stack(struct memory_manager *manager) {
     for (int i = 0; i < manager->stack_size; i++) {
@@ -63,8 +55,10 @@ int memory_manager_release_register(struct memory_manager *manager, struct instr
     stack_set->opcode = ADDI;
     stack_set->op0.kind = INSTRUCTION_OPERAND_REGISTER;
     stack_set->op0.reg = SP_REGISTER;
-    stack_set->op1.kind = INSTRUCTION_OPERAND_CONSTANT;
-    stack_set->op1.constant = free_stack;
+    stack_set->op1.kind = INSTRUCTION_OPERAND_REGISTER;
+    stack_set->op1.reg = SP_REGISTER;
+    stack_set->op2.kind = INSTRUCTION_OPERAND_CONSTANT;
+    stack_set->op2.constant = free_stack;
     instruction_insert_before(array, instruction, stack_set);
     stack_set = instruction_alloc();
     stack_set->opcode = STR;
@@ -77,8 +71,10 @@ int memory_manager_release_register(struct memory_manager *manager, struct instr
     stack_set->opcode = SUBI;
     stack_set->op0.kind = INSTRUCTION_OPERAND_REGISTER;
     stack_set->op0.reg = SP_REGISTER;
-    stack_set->op1.kind = INSTRUCTION_OPERAND_CONSTANT;
-    stack_set->op1.constant = free_stack;
+    stack_set->op1.kind = INSTRUCTION_OPERAND_REGISTER;
+    stack_set->op1.reg = SP_REGISTER;
+    stack_set->op2.kind = INSTRUCTION_OPERAND_CONSTANT;
+    stack_set->op2.constant = free_stack;
     instruction_insert_before(array, instruction, stack_set);
     manager->stack[free_stack] = manager->general_registers[reg];
     manager->available_registers[reg] = true;
@@ -94,7 +90,7 @@ int memory_manager_get_register(struct memory_manager *manager, struct instructi
     }
     for (int i = 0; i < manager->stack_size; i++) {
         if (manager->stack[i] == symbol) {
-            int free_register = memory_manager_find_free_register(manager);
+            int free_register = memory_manager_find_free_register(manager, instruction);
             if (free_register == -1) {
                 free_register = memory_manager_release_register(manager, array, instruction,
                                                                 memory_manager_find_allowed_free_register(manager,
@@ -104,8 +100,10 @@ int memory_manager_get_register(struct memory_manager *manager, struct instructi
             stack_get->opcode = ADDI;
             stack_get->op0.kind = INSTRUCTION_OPERAND_REGISTER;
             stack_get->op0.reg = SP_REGISTER;
-            stack_get->op1.kind = INSTRUCTION_OPERAND_CONSTANT;
-            stack_get->op1.constant = i;
+            stack_get->op1.kind = INSTRUCTION_OPERAND_REGISTER;
+            stack_get->op1.reg = SP_REGISTER;
+            stack_get->op2.kind = INSTRUCTION_OPERAND_CONSTANT;
+            stack_get->op2.constant = i;
             instruction_insert_before(array, instruction, stack_get);
             stack_get = instruction_alloc();
             stack_get->opcode = LDR;
@@ -118,8 +116,10 @@ int memory_manager_get_register(struct memory_manager *manager, struct instructi
             stack_get->opcode = SUBI;
             stack_get->op0.kind = INSTRUCTION_OPERAND_REGISTER;
             stack_get->op0.reg = SP_REGISTER;
-            stack_get->op1.kind = INSTRUCTION_OPERAND_CONSTANT;
-            stack_get->op1.constant = i;
+            stack_get->op1.kind = INSTRUCTION_OPERAND_REGISTER;
+            stack_get->op1.reg = SP_REGISTER;
+            stack_get->op2.kind = INSTRUCTION_OPERAND_CONSTANT;
+            stack_get->op2.constant = i;
             instruction_insert_before(array, instruction, stack_get);
             manager->general_registers[free_register] = manager->stack[i];
             manager->available_registers[free_register] = false;
@@ -127,7 +127,7 @@ int memory_manager_get_register(struct memory_manager *manager, struct instructi
             return free_register;
         }
     }
-    int free_register = memory_manager_find_free_register(manager);
+    int free_register = memory_manager_find_free_register(manager, instruction);
     if (free_register == -1) {
         free_register = memory_manager_release_register(manager, array, instruction,
                                                         memory_manager_find_allowed_free_register(manager,
@@ -139,18 +139,34 @@ int memory_manager_get_register(struct memory_manager *manager, struct instructi
 }
 
 
+bool memory_manager_register_is_freeable(struct memory_manager *manager, struct instruction* instruction, int reg) {
+    if (!((instruction->op0.kind == INSTRUCTION_OPERAND_SYMBOL &&
+              instruction->op0.symbol == manager->general_registers[reg]) ||
+             (instruction->op1.kind == INSTRUCTION_OPERAND_SYMBOL &&
+              instruction->op1.symbol == manager->general_registers[reg]) ||
+             (instruction->op2.kind == INSTRUCTION_OPERAND_SYMBOL &&
+              instruction->op2.symbol == manager->general_registers[reg]) ||
+             (instruction->op0.kind == INSTRUCTION_OPERAND_REGISTER && instruction->op0.reg == reg) ||
+             (instruction->op1.kind == INSTRUCTION_OPERAND_REGISTER && instruction->op1.reg == reg) ||
+             (instruction->op2.kind == INSTRUCTION_OPERAND_REGISTER && instruction->op2.reg == reg))) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 int memory_manager_find_allowed_free_register(struct memory_manager *manager, struct instruction *instruction) {
     for(int i = 0; i < GENERAL_REGISTER_COUNT; i++) {
-        if (!((instruction->op0.kind == INSTRUCTION_OPERAND_SYMBOL &&
-             instruction->op0.symbol == manager->general_registers[i]) ||
-            (instruction->op1.kind == INSTRUCTION_OPERAND_SYMBOL &&
-             instruction->op1.symbol == manager->general_registers[i]) ||
-            (instruction->op2.kind == INSTRUCTION_OPERAND_SYMBOL &&
-             instruction->op2.symbol == manager->general_registers[i]) ||
-            (instruction->op0.kind == INSTRUCTION_OPERAND_REGISTER && instruction->op0.reg == i) ||
-            (instruction->op1.kind == INSTRUCTION_OPERAND_REGISTER && instruction->op1.reg == i) ||
-            (instruction->op2.kind == INSTRUCTION_OPERAND_REGISTER && instruction->op2.reg == i)))
+        if (memory_manager_register_is_freeable(manager, instruction, i))
             return i;
+    }
+    return -1;
+}
+int memory_manager_find_free_register(struct memory_manager *manager, struct instruction * instruction) {
+    for (int i = 0; i < GENERAL_REGISTER_COUNT; i++) {
+        if (manager->available_registers[i] == true || (manager->general_registers[i]->usage_count == 0 && memory_manager_register_is_freeable(manager, instruction, i))) {
+            return i;
+        }
     }
     return -1;
 }
@@ -182,22 +198,22 @@ void memory_manager_associate_register(struct memory_manager *manager, struct in
         case PUSH:
         case POP:
         case AFC:
-        case JMZ:
+        case JMZ_I:
+        case LDR:
+        case STR:
             if (instruction->op0.kind == INSTRUCTION_OPERAND_SYMBOL) {
                 instruction->op0.symbol->usage_count--;
                 instruction->op0.reg = memory_manager_get_register(manager, array, instruction,
                                                                    instruction->op0.symbol);
                 instruction->op0.kind = INSTRUCTION_OPERAND_REGISTER;
             }
-        case JMP:
+        case JMP_I:
         case CALL:
         case NOP:
         case RET:
         case END:
         case SUBI:
         case ADDI:
-        case LDR:
-        case STR:
             break;
         case REGISTER_PROTECT:
             memory_manager_protect_registers(manager, array, instruction);
@@ -208,7 +224,7 @@ void memory_manager_associate_register(struct memory_manager *manager, struct in
 void memory_manager_protect_registers(struct memory_manager *manager, struct instruction_array *array,
                                       struct instruction *instruction) {
     for (int i = 0; i < GENERAL_REGISTER_COUNT; i++) {
-        if (manager->general_registers[i] != NULL) { //TODO vérifier utilisation
+        if (manager->general_registers[i] != NULL && manager->available_registers[i] == false) { //TODO vérifier utilisation
             memory_manager_release_register(manager, array, instruction, i);
         }
     }

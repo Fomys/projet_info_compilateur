@@ -74,12 +74,13 @@ void symbol_print(struct symbol* symbol) {
         case SYMBOL_FUNCTION:
             printf("FUNCTION(");
             arguments_print(symbol->symbol_function.arguments);
+            printf(" ");
             break;
     }
     if(symbol->name == NULL) {
         printf("%p)", symbol);
     } else {
-        printf("%p %s)", symbol, symbol->name);
+        printf("%s)", symbol->name);
     }
 }
 

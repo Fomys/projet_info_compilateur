@@ -1,12 +1,9 @@
-a = 2;
-b = 3;
-c = 5;
-d = 7;
-e = 11;
-
-if c < a {
-    e = a;
-} else {
-    e = b;
+fn fibo(n) {
+    if n < 2 {
+        return n;
+    } else {
+        return fibo(n - 1) + fibo(n - 2);
+    }
 }
-f = a + b + c + d + e;
+
+a = fibo(1);

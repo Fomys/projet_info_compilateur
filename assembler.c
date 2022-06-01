@@ -4,6 +4,7 @@
 
 #define SKIP_RESOLVE_STACK 0
 #define SKIP_RESOLVE_JMP 0
+#define SKIP_RESOLVE_CALL 0
 #define SKIP_ASSOCIATE_REGISTERS 0
 #define SKIP_FIX_INSTRUCTIONS 0
 
@@ -17,8 +18,8 @@ void simplify_instruction(struct instruction_array* array, struct instruction* i
         case GT:
         case LT:
         case RET:
-        case JMP:
-        case JMZ:
+        case JMP_I:
+        case JMZ_I:
         case AFC:
         case NOP:
         case PUSH:
@@ -30,6 +31,7 @@ void simplify_instruction(struct instruction_array* array, struct instruction* i
         case END:
         case SUBI:
         case ADDI:
+        case CPY:
             break;
     }
 }
@@ -93,10 +95,10 @@ void resolve_jmp(struct instruction_array* array) {
 #endif
     struct instruction* next = array->head;
     while(next != NULL) {
-        if(next->opcode == JMP && next->op0.kind == INSTRUCTION_OPERAND_INSTRUCTION) {
+        if(next->opcode == JMP_I && next->op0.kind == INSTRUCTION_OPERAND_INSTRUCTION) {
             next->op0.kind = INSTRUCTION_OPERAND_CONSTANT;
             next->op0.constant = instruction_array_search(array, next->op0.instruction->after);
-        } else if(next->opcode == JMZ && next->op1.kind == INSTRUCTION_OPERAND_INSTRUCTION) {
+        } else if(next->opcode == JMZ_I && next->op1.kind == INSTRUCTION_OPERAND_INSTRUCTION) {
             next->op1.kind = INSTRUCTION_OPERAND_CONSTANT;
             next->op1.constant = instruction_array_search(array, next->op1.instruction->after);
         }
@@ -124,42 +126,48 @@ struct instruction_array* assemble(struct AST_node* root) {
 
 
 void resolve_functions(struct instruction_array* array, struct memory_manager* manager) {
+#if SKIP_RESOLVE_CALL
+    return;
+#endif
     struct instruction* next = array->head;
     while(next != NULL) {
         if (next->opcode == CALL) {
-            struct instruction* push_pc = instruction_alloc();
-            push_pc->opcode = STR;
-            push_pc->op0.kind = INSTRUCTION_OPERAND_REGISTER;
-            push_pc->op0.reg = PC_REGISTER;
-            push_pc->op1.kind = INSTRUCTION_OPERAND_REGISTER;
-            push_pc->op1.constant = SP_REGISTER;
-            instruction_insert_before(array, next, push_pc);
-            next->opcode = JMP;
+            next->opcode = JMP_I;
             if(next->op0.symbol->symbol_function.assembled == NULL) {
                 AST_optimize(next->op0.symbol->symbol_function.body);
-                struct instruction_array *function_array = instruction_array_alloc();
-                struct instruction* nop = instruction_alloc();
-                nop->opcode = NOP;
-                instruction_array_push(function_array, nop);
-                struct memory_manager *manager = memory_manager_alloc();
-                struct symbol* anonymous = symbol_alloc();
-                manager_push_symbol_on_stack(manager, anonymous);
 
-                assemble_node(next->op0.symbol->symbol_function.body,
-                              next->op0.symbol->symbol_function.body->node_body.symbol_table, function_array);
+                struct instruction_array *function_array = instruction_array_alloc();
+                struct instruction* label = instruction_alloc();
+                label->opcode = LABEL;
+                label->op0.kind = INSTRUCTION_OPERAND_SYMBOL;
+                label->op0.symbol = next->op0.symbol;
+                instruction_array_push(function_array, label);
+
+                // Récupération du PC
+                struct memory_manager *function_manager = memory_manager_alloc();
+                struct symbol* anonymous_pc = symbol_alloc();
+                manager_push_symbol_on_stack(function_manager, anonymous_pc);
 
                 // Récupération des arguments
                 for(unsigned int i = 0; i < next->op0.symbol->symbol_function.arguments->arguments_count; i++) {
-                    manager_push_symbol_on_stack(manager, next->op0.symbol->symbol_function.arguments->arguments[i]);
+                    manager_push_symbol_on_stack(function_manager, next->op0.symbol->symbol_function.arguments->arguments[i]);
                 }
-                associate_registers(manager, function_array);
 
+                assemble_node(next->op0.symbol->symbol_function.body,
+                              next->op0.symbol->symbol_function.body->node_body.symbol_table,
+                              function_array);
+
+
+                associate_registers(function_manager, function_array);
 
                 next->op0.symbol->symbol_function.assembled = function_array;
+
                 next->op0.kind = INSTRUCTION_OPERAND_INSTRUCTION;
                 next->op0.instruction = function_array->head;
-                resolve_functions(function_array, manager);
-                resolve_stack(function_array, manager);
+
+                //resolve_functions(function_array, function_manager);
+                resolve_stack(function_array, function_manager);
+
                 instruction_array_append(array, function_array);
             } else {
                 next->op0.kind = INSTRUCTION_OPERAND_INSTRUCTION;
@@ -244,8 +252,6 @@ struct symbol* assemble_integer(struct AST_node* node, struct symbol_table* symb
 }
 
 struct symbol* assemble_assignement(struct AST_node* node, struct symbol_table* symbol_table, struct instruction_array* instructions) {
-    struct symbol* anonymous = symbol_table_create_anonymous(symbol_table);
-    anonymous->usage_count++;
     struct instruction* instruction = instruction_alloc();
     instruction->opcode = CPY;
     instruction->op0.kind = INSTRUCTION_OPERAND_SYMBOL;
@@ -255,7 +261,7 @@ struct symbol* assemble_assignement(struct AST_node* node, struct symbol_table* 
     instruction->op1.symbol = assemble_node(node->node_assignement.value, symbol_table, instructions);
     instruction->op1.symbol->usage_count++;
     instruction_array_push(instructions, instruction);
-    return anonymous;
+    return NULL;
 }
 
 struct symbol* assemble_function_call(struct AST_node* node, struct symbol_table* symbol_table, struct instruction_array* instructions) {
@@ -263,6 +269,8 @@ struct symbol* assemble_function_call(struct AST_node* node, struct symbol_table
     struct parameters* parameters = parameters_alloc();
     for(unsigned int i = 0; i < node->node_call.parameters->parameters_count; i++) {
         struct symbol* param = assemble_node(node->node_call.parameters->parameters[i], symbol_table, instructions);
+        // TODO: est-ce utile ?
+        // param->usage_count++;
         parameter_push(parameters, param);
     }
     // Protection des registres
@@ -270,36 +278,69 @@ struct symbol* assemble_function_call(struct AST_node* node, struct symbol_table
     protect->opcode = REGISTER_PROTECT;
     instruction_array_push(instructions, protect);
 
+
     // Incrémentation de la stack
     struct instruction* increase = instruction_alloc();
     increase->opcode = ADDI;
     increase->op0.kind = INSTRUCTION_OPERAND_REGISTER;
-    increase->op0.offset = SP_REGISTER;
-    increase->op1.kind = INSTRUCTION_OPERAND_INSTRUCTION;
-    increase->op1.offset = 0;
+    increase->op0.reg = SP_REGISTER;
+    increase->op1.kind = INSTRUCTION_OPERAND_REGISTER;
+    increase->op1.reg = SP_REGISTER;
+    increase->op2.kind = INSTRUCTION_OPERAND_STACK_SIZE;
+    increase->op2.offset = 0;
     instruction_array_push(instructions,increase);
 
+    // Push des paramètres sur la stack
     for(int i = 0; i < parameters->parameter_count; i++) {
         struct instruction *push = instruction_alloc();
         push->opcode = ADDI;
         push->op0.kind = INSTRUCTION_OPERAND_REGISTER;
         push->op0.reg = SP_REGISTER;
-        push->op1.kind = INSTRUCTION_OPERAND_CONSTANT;
-        push->op1.constant = i+1;
+        push->op1.kind = INSTRUCTION_OPERAND_REGISTER;
+        push->op1.reg = SP_REGISTER;
+        push->op2.kind = INSTRUCTION_OPERAND_CONSTANT;
+        push->op2.constant = i + 1;
         instruction_array_push(instructions, push);
+
+        push = instruction_alloc();
         push->opcode = STR;
         push->op0.kind = INSTRUCTION_OPERAND_SYMBOL;
         push->op0.symbol = parameters->parameters[i];
         push->op1.kind = INSTRUCTION_OPERAND_REGISTER;
-        push->op1.constant = SP_REGISTER; //i + 1;
+        push->op1.constant = SP_REGISTER;
         instruction_array_push(instructions, push);
+
+        push = instruction_alloc();
         push->opcode = SUBI;
         push->op0.kind = INSTRUCTION_OPERAND_REGISTER;
         push->op0.reg = SP_REGISTER;
-        push->op1.kind = INSTRUCTION_OPERAND_CONSTANT;
-        push->op1.constant = i+1;
+        push->op1.kind = INSTRUCTION_OPERAND_REGISTER;
+        push->op1.reg = SP_REGISTER;
+        push->op2.kind = INSTRUCTION_OPERAND_CONSTANT;
+        push->op2.constant = i + 1;
         instruction_array_push(instructions, push);
     }
+
+
+
+    struct instruction* save_pc = instruction_alloc();
+    save_pc->opcode = ADDI;
+    save_pc->op0.kind = INSTRUCTION_OPERAND_REGISTER;
+    save_pc->op0.reg = 0;
+    save_pc->op1.kind = INSTRUCTION_OPERAND_REGISTER;
+    save_pc->op1.reg = PC_REGISTER;
+    save_pc->op2.kind = INSTRUCTION_OPERAND_CONSTANT;
+    save_pc->op2.constant = 3;
+    instruction_array_push(instructions, save_pc);
+
+    save_pc = instruction_alloc();
+    save_pc->opcode = STR;
+    save_pc->op0.kind = INSTRUCTION_OPERAND_REGISTER;
+    save_pc->op0.reg = 0;
+    save_pc->op1.kind = INSTRUCTION_OPERAND_REGISTER;
+    save_pc->op1.reg = SP_REGISTER;
+    instruction_array_push(instructions, save_pc);
+
 
     // Appel de la fonction
     struct symbol* anonymous = symbol_table_create_anonymous(symbol_table);
@@ -308,14 +349,19 @@ struct symbol* assemble_function_call(struct AST_node* node, struct symbol_table
     call->op0.kind = INSTRUCTION_OPERAND_SYMBOL;
     call->op0.symbol = node->node_symbol.symbol;
     instruction_array_push(instructions, call);
+
     // Récupération de la valeur retour
     struct instruction* ret = instruction_alloc();
     ret->opcode = ADDI;
     ret->op0.kind = INSTRUCTION_OPERAND_REGISTER;
     ret->op0.reg = SP_REGISTER;
-    ret->op1.kind = INSTRUCTION_OPERAND_CONSTANT;
-    ret->op1.constant = 1;
+    ret->op1.kind = INSTRUCTION_OPERAND_REGISTER;
+    ret->op1.reg = SP_REGISTER;
+    ret->op2.kind = INSTRUCTION_OPERAND_CONSTANT;
+    ret->op2.constant = 1;
     instruction_array_push(instructions, ret);
+
+    ret = instruction_alloc();
     ret->opcode = LDR;
     ret->op0.kind = INSTRUCTION_OPERAND_SYMBOL;
     ret->op0.symbol = anonymous;
@@ -323,19 +369,25 @@ struct symbol* assemble_function_call(struct AST_node* node, struct symbol_table
     ret->op1.kind = INSTRUCTION_OPERAND_REGISTER;
     ret->op1.reg = SP_REGISTER;
     instruction_array_push(instructions, ret);
+
+    ret = instruction_alloc();
     ret->opcode = SUBI;
     ret->op0.kind = INSTRUCTION_OPERAND_REGISTER;
     ret->op0.reg = SP_REGISTER;
-    ret->op1.kind = INSTRUCTION_OPERAND_CONSTANT;
-    ret->op1.constant = 1;
+    ret->op1.kind = INSTRUCTION_OPERAND_REGISTER;
+    ret->op1.reg = SP_REGISTER;
+    ret->op2.kind = INSTRUCTION_OPERAND_CONSTANT;
+    ret->op2.constant = 1;
     instruction_array_push(instructions, ret);
     // Décrémentation de la stack
     struct instruction* decrease = instruction_alloc();
     decrease->opcode = SUBI;
     decrease->op0.kind = INSTRUCTION_OPERAND_REGISTER;
     decrease->op0.reg = SP_REGISTER;
-    decrease->op1.kind = INSTRUCTION_OPERAND_STACK_SIZE;
-    decrease->op1.offset = 0;
+    decrease->op1.kind = INSTRUCTION_OPERAND_REGISTER;
+    decrease->op1.reg = SP_REGISTER;
+    decrease->op2.kind = INSTRUCTION_OPERAND_STACK_SIZE;
+    decrease->op2.offset = 0;
     instruction_array_push(instructions, decrease);
     return anonymous;
 }
@@ -346,7 +398,7 @@ struct symbol* assemble_if(struct AST_node* node, struct symbol_table* symbol_ta
     struct instruction* instruction_jmp_false = instruction_alloc();
     struct instruction* instruction_jmp_true = instruction_alloc();
 
-    instruction_jmp_false->opcode = JMZ;
+    instruction_jmp_false->opcode = JMZ_I;
     instruction_jmp_false->op0.kind = INSTRUCTION_OPERAND_SYMBOL;
     instruction_jmp_false->op0.symbol = condition;
     instruction_jmp_false->op0.symbol->usage_count++;
@@ -355,7 +407,7 @@ struct symbol* assemble_if(struct AST_node* node, struct symbol_table* symbol_ta
 
     assemble_node(node->node_if.if_true, symbol_table, instructions);
 
-    instruction_jmp_true->opcode = JMP;
+    instruction_jmp_true->opcode = JMP_I;
     instruction_jmp_true->op0.kind = INSTRUCTION_OPERAND_INSTRUCTION;
     instruction_array_push(instructions, instruction_jmp_true);
 
@@ -382,9 +434,13 @@ struct symbol* assemble_return(struct AST_node* node, struct symbol_table* symbo
     ret->opcode = ADDI;
     ret->op0.kind = INSTRUCTION_OPERAND_REGISTER;
     ret->op0.reg = SP_REGISTER;
-    ret->op1.kind = INSTRUCTION_OPERAND_CONSTANT;
-    ret->op1.constant = 1;
+    ret->op1.kind = INSTRUCTION_OPERAND_REGISTER;
+    ret->op1.reg = SP_REGISTER;
+    ret->op2.kind = INSTRUCTION_OPERAND_CONSTANT;
+    ret->op2.constant = 1;
     instruction_array_push(array, ret);
+
+    ret = instruction_alloc();
     ret->opcode = STR;
     ret->op0.kind = INSTRUCTION_OPERAND_SYMBOL;
     ret->op0.symbol = assemble_node(node->node_return.expression, symbol_table, array);
@@ -392,15 +448,29 @@ struct symbol* assemble_return(struct AST_node* node, struct symbol_table* symbo
     ret->op1.kind = INSTRUCTION_OPERAND_REGISTER;
     ret->op1.constant = SP_REGISTER;
     instruction_array_push(array, ret);
+
     ret = instruction_alloc();
     ret->opcode = SUBI;
     ret->op0.kind = INSTRUCTION_OPERAND_REGISTER;
     ret->op0.reg = SP_REGISTER;
-    ret->op1.kind = INSTRUCTION_OPERAND_CONSTANT;
-    ret->op1.constant = 1;
+    ret->op1.kind = INSTRUCTION_OPERAND_REGISTER;
+    ret->op1.reg = SP_REGISTER;
+    ret->op2.kind = INSTRUCTION_OPERAND_CONSTANT;
+    ret->op2.constant = 1;
     instruction_array_push(array, ret);
+
     ret = instruction_alloc();
-    ret->opcode = RET;
+    ret->opcode = LDR;
+    ret->op0.kind = INSTRUCTION_OPERAND_REGISTER;
+    ret->op0.reg = 0;
+    ret->op1.kind = INSTRUCTION_OPERAND_REGISTER;
+    ret->op1.reg = SP_REGISTER;
+    instruction_array_push(array, ret);
+
+    ret = instruction_alloc();
+    ret->opcode = JMP;
+    ret->op0.kind = INSTRUCTION_OPERAND_REGISTER;
+    ret->op0.reg = 0;
     instruction_array_push(array, ret);
     return NULL;
 }

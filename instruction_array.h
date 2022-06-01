@@ -13,8 +13,9 @@ enum instruction_opcode {
     GT, // op0 <= op1 > op2
     LT, // op0 <= op1 < op2
     AFC, // op0 <= op1
+    JMP_I, // dst = op0
     JMP, // dst = op0
-    JMZ, // dst = op0, cond = op1
+    JMZ_I, // dst = op0, cond = op1
     CPY, // op0 <= op1
     NOP,
     PUSH, // src = op0
@@ -26,7 +27,8 @@ enum instruction_opcode {
     ADDI,
     END,
     LDR,
-    STR
+    STR,
+    LABEL
 };
 
 enum instruction_operand_kind {

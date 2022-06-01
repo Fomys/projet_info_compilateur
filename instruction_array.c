@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include "instruction_array.h"
+#include "memory_manager.h"
 
 struct instruction_array* instruction_array_alloc() {
     struct instruction_array* array = malloc(sizeof(struct instruction_array));
@@ -28,7 +29,7 @@ void instruction_array_print(struct instruction_array* array) {
     struct instruction* next = array->head;
     int i = 0;
     while(next != NULL) {
-        printf("%d %p ", i++, next->after);
+        printf("%d\t%p -> %p\t", i++, next, next->after);
         instruction_print(next);
         next = next->after;
     }
@@ -62,11 +63,11 @@ void instruction_array_print_raw(struct instruction_array* array, FILE* file) {
             case AFC:
                 fprintf(file, "AFC");
                 break;
-            case JMP:
-                fprintf(file, "JMP");
+            case JMP_I:
+                fprintf(file, "JMPI");
                 break;
-            case JMZ:
-                fprintf(file, "JMZ");
+            case JMZ_I:
+                fprintf(file, "JMZI");
                 break;
             case CPY:
                 fprintf(file, "CPY");
@@ -103,6 +104,12 @@ void instruction_array_print_raw(struct instruction_array* array, FILE* file) {
                 break;
             case ADDI:
                 fprintf(file, "ADDI");
+                break;
+            case JMP:
+                fprintf(file, "JMP");
+                break;
+            case LABEL:
+                fprintf(file, "LABEL");
                 break;
         }
         fprintf(file, " %d %d %d\n", next->op0.constant, next->op1.constant, next->op2.constant);
@@ -142,7 +149,6 @@ void instruction_free(struct instruction* instruction) {
     free(instruction);
 }
 void instruction_print(struct instruction* instruction) {
-    printf("%p\t", instruction);
     switch (instruction->opcode) {
         case MUL:
             printf("MUL(");
@@ -214,7 +220,7 @@ void instruction_print(struct instruction* instruction) {
             operand_print(&instruction->op1);
             printf(")");
             break;
-        case JMP:
+        case JMP_I:
             printf("JMP(");
             operand_print(&instruction->op0);
             printf(")");
@@ -236,7 +242,7 @@ void instruction_print(struct instruction* instruction) {
             operand_print(&instruction->op0);
             printf(")");
             break;
-        case JMZ:
+        case JMZ_I:
             printf("JMZ(");
             operand_print(&instruction->op0);
             printf(", to: ");
@@ -278,18 +284,28 @@ void instruction_print(struct instruction* instruction) {
             printf("SUBI(");
             operand_print(&instruction->op0);
             printf(" <= ");
-            operand_print(&instruction->op0);
-            printf(" - ");
             operand_print(&instruction->op1);
+            printf(" - ");
+            operand_print(&instruction->op2);
             printf(")");
             break;
         case ADDI:
             printf("ADDI(");
             operand_print(&instruction->op0);
             printf(" <= ");
-            operand_print(&instruction->op0);
-            printf(" + ");
             operand_print(&instruction->op1);
+            printf(" + ");
+            operand_print(&instruction->op2);
+            printf(")");
+            break;
+        case LABEL:
+            printf("LABEL(");
+            operand_print(&instruction->op0);
+            printf(")");
+            break;
+        case JMP:
+            printf("JMP(@");
+            operand_print(&instruction->op0);
             printf(")");
             break;
     }
@@ -308,7 +324,13 @@ void operand_print(struct operand* operand) {
             printf("%p", operand->instruction);
             break;
         case INSTRUCTION_OPERAND_REGISTER:
-            printf("r%d", operand->reg);
+            if(operand->reg == PC_REGISTER) {
+                printf("pc");
+            } else if (operand->reg == SP_REGISTER) {
+                printf("sp");
+            } else {
+                printf("r%d", operand->reg);
+            }
             break;
         case INSTRUCTION_OPERAND_PARAMETERS:
             printf("parameters");
